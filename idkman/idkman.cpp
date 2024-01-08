@@ -118,7 +118,6 @@ int main() {
                         std::wstring launchCommand = L"\"" + std::wstring(launchDirectory.begin(), launchDirectory.end()) + L"\\" + std::wstring(selectedProgram.begin(), selectedProgram.end()) + L"\"";
                         std::wcout << L"launch command: " << launchCommand << std::endl;
 
-                        // Use ShellExecuteW to launch the process without a command prompt window
                         ShellExecuteW(NULL, NULL, launchCommand.c_str(), NULL, NULL, SW_SHOWNORMAL);
                     }
                     else {
