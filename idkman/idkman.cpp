@@ -5,25 +5,7 @@
 #include <string>
 #include <algorithm>
 
-#ifdef _WIN32
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
-
-bool isExecutable(const std::filesystem::path& path) {
-    if (path.extension() != ".exe") {
-        return false;
-    }
-
-#ifdef _WIN32
-    return _access(path.string().c_str(), 0) == 0;
-#else
-    return access(path.c_str(), X_OK) == 0;
-#endif
-}
-
-std::string findExeInDirec(const std::string& direc, const std::string& programName, std::vector<std::string>& suggestions) {
+std::string findExeInDirec(const std::string& direc, const std::string& programName) {
     std::string lowerProgramName = programName;
     std::transform(lowerProgramName.begin(), lowerProgramName.end(), lowerProgramName.begin(), ::tolower);
 
@@ -31,29 +13,21 @@ std::string findExeInDirec(const std::string& direc, const std::string& programN
         std::string filenameStem = entry.path().filename().stem().string();
         std::transform(filenameStem.begin(), filenameStem.end(), filenameStem.begin(), ::tolower);
 
-        if (filenameStem == lowerProgramName && entry.path().extension() == ".exe" && isExecutable(entry.path())) {
-            std::cout << "Found executable at: " << entry.path() << std::endl;
-            suggestions.push_back(entry.path().string());
-            return entry.path().parent_path().string(); // Return the parent directory
+        if (filenameStem == lowerProgramName) {
+            std::string entryPathway = entry.path().string();
+            std::cout << "Entry pathway: " << entryPathway << std::endl;
+            return entryPathway;
         }
     }
-
-    std::cout << "No executable files found in subdirectories of: " << direc << std::endl;
     return "";
 }
 
-std::vector<std::string> findExeSuggestionsInDirec(const std::string& direc, const std::string& programName) {
-    std::string lowerProgramName = programName;
-    std::transform(lowerProgramName.begin(), lowerProgramName.end(), lowerProgramName.begin(), ::tolower);
-
+std::vector<std::string> findSuggInDirec(const std::string& entryPathway, const std::string& programName) {
     std::vector<std::string> suggestions;
 
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(direc)) {
-        std::string filenameStem = entry.path().filename().stem().string();
-        std::transform(filenameStem.begin(), filenameStem.end(), filenameStem.begin(), ::tolower);
-
-        if (filenameStem == lowerProgramName && entry.path().extension() == ".exe" && isExecutable(entry.path())) {
-            suggestions.push_back(entry.path().string());
+    for (const auto& entry : std::filesystem::directory_iterator(entryPathway)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".exe") {
+            suggestions.push_back(entry.path().filename().string());
         }
     }
 
@@ -104,42 +78,48 @@ int main() {
         std::getline(std::cin, programName);
 
         std::vector<std::string> appTitles;
-        std::string subdirectory; 
-
         for (const auto& dir : fileDirVec) {
-            subdirectory = findExeInDirec(dir, programName, appTitles);
-            if (!subdirectory.empty()) {
-                std::transform(appTitles.back().begin(), appTitles.back().end(), appTitles.back().begin(), ::tolower);
+            std::filesystem::path executablePath = findExeInDirec(dir, programName);
+            if (!executablePath.empty()) {
+                appTitles.push_back(executablePath.string());
             }
         }
 
-        std::cout << "Subdirectory: " << subdirectory << std::endl; 
+        if (!appTitles.empty()) {
+            std::vector<std::string> suggestions = findSuggInDirec(appTitles.front(), programName);
 
-        std::cout << "File direct front: " << fileDirVec.front() << std::endl;
-        for (int i = 0; i < fileDirVec.size(); i++) {
-            std::cout << "File direct: " << fileDirVec[i] << std::endl;
-        }
-        std::cout << "Program name: " << programName << std::endl;
+            if (!suggestions.empty()) {
 
-        std::vector<std::string> suggestions = findExeSuggestionsInDirec(subdirectory, programName);
+                std::cout << "Size of suggestions: " << suggestions.size() << std::endl;
 
-        for (int j = 0; j < suggestions.size(); j++) {
-            std::cout << "Suggestion: " << suggestions[j] << std::endl;
-        }
+                std::cout << "Here are some suggestions from the same directory: \n";
+                for (int k = 0; k < suggestions.size(); k++) {
+                    int suggNumber = k + 1;
+                    std::cout << suggNumber << ": " << suggestions[k] << std::endl << std::endl;
+                }
 
-        if (!suggestions.empty()) {
-            std::cout << "Executable files found in directory: \n";
-            for (const auto& suggestion : suggestions) {
-                std::cout << "--" << suggestion << std::endl;
+                int prgChoice;
+                std::cout << "If you would like to launch one of these programs, type in the number corresponding to the program: ";
+                std::cin >> prgChoice;
+
+                if (prgChoice > 0 && prgChoice <= suggestions.size()) {
+                    std::string selectedProgram = suggestions[prgChoice - 1];
+                    std::string launchDirectory = appTitles.front();
+
+                    std::string launchCommand = "start \"" + launchDirectory + "\\" + selectedProgram + "\"";
+                    std::cout << "launch command: " << launchCommand << std::endl;
+
+                    system(launchCommand.c_str());
+                }
+                else {
+                    std::cout << "Invalid choice. Exiting...\n";
+                }
             }
-
-            return 0;
-        }
-        else {
-            std::cout << "No executable files found in directory\n";
+            else {
+                std::cout << "No other .exe files found in the same directory\n";
+            }
         }
     }
-
     else if (startUp == 3) {
 
     }
