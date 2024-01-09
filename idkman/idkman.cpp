@@ -6,41 +6,61 @@
 #include <algorithm>
 #include <Windows.h>
 
-std::string findExeInDirec(const std::string& direc, const std::string& programName) {
-    std::string lowerProgramName = programName;
-    std::transform(lowerProgramName.begin(), lowerProgramName.end(), lowerProgramName.begin(), ::tolower);
+#ifdef _WIN32
+#define CLEAR_SCREEN "cls"
+#else
+#define CLEAR_SCREEN "clear"
+#endif
 
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(direc)) {
-        std::string filenameStem = entry.path().filename().stem().string();
-        std::transform(filenameStem.begin(), filenameStem.end(), filenameStem.begin(), ::tolower);
+std::string findExeInDirec(const std::string& direc, const std::string programName) {
+	std::string lowerProgramName = programName;
+	std::transform(lowerProgramName.begin(), lowerProgramName.end(), lowerProgramName.begin(), ::tolower);
 
-        if (filenameStem == lowerProgramName) {
-            std::string entryPathway = entry.path().string();
-            std::cout << "Entry pathway: " << entryPathway << std::endl;
-            return entryPathway;
-        }
-    }
-    return "";
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(direc)) {
+		std::string filenameStem = entry.path().filename().stem().string(); 
+		std::transform(filenameStem.begin(), filenameStem.end(), filenameStem.begin(), ::tolower);
+		if (filenameStem == lowerProgramName) {
+			std::string entryPathway = entry.path().string();
+			return entryPathway;
+		}
+	}
+	return "";
 }
 
 std::vector<std::string> findSuggInDirec(const std::string& entryPathway, const std::string& programName) {
-    std::vector<std::string> suggestions;
+	std::vector<std::string> suggestions;
 
-    for (const auto& entry : std::filesystem::directory_iterator(entryPathway)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".exe") {
-            suggestions.push_back(entry.path().filename().string());
-        }
-    }
-
+	for (const auto& entry : std::filesystem::directory_iterator(entryPathway)) {
+		if (entry.is_regular_file() && (entry.path().extension() == ".exe")) {
+			suggestions.push_back(entry.path().filename().string());
+		}
+	}
     return suggestions;
 }
 
+void launchProgram(const std::string& launchDirec, const std::string& selectedProgram) {
+    std::wstring launchCmd;
+
+    if (selectedProgram.find(':') != std::string::npos) {
+        launchCmd = L"\"" + std::wstring(selectedProgram.begin(), selectedProgram.end()) + L"\"";
+    }
+    else {
+        launchCmd = L"\"" + std::wstring(launchDirec.begin(), launchDirec.end()) +
+            L"\\" + std::wstring(selectedProgram.begin(), selectedProgram.end()) + L"\"";
+    }
+
+    std::wcout << L"Launch cmd: " << launchCmd << std::endl << std::endl;
+
+    ShellExecuteW(NULL, NULL, launchCmd.c_str(), NULL, NULL, SW_SHOWNORMAL);
+}
+
+
 int main() {
+    std::system(CLEAR_SCREEN);
 
     bool runPg = true;
 
     while (runPg) {
-
         int startUp;
         std::cout << "To add a new library route, press 1\n"
             << "To launch a game or program, press 2\n"
@@ -94,12 +114,20 @@ int main() {
                 }
             }
 
-            if (!appTitles.empty()) {
+            for (int p = 0; p < appTitles.size(); p++) {
+                std::cout << "app titles: " << appTitles[p] << std::endl;
+            }
+            
+
+            if (!appTitles.empty() && appTitles.front().substr(appTitles.front().size() - 4) != ".exe") {
+
                 std::vector<std::string> suggestions = findSuggInDirec(appTitles.front(), programName);
 
-                if (!suggestions.empty()) {
+                for (int p = 0; p < suggestions.size(); p++) {
+                    std::cout << "suggestions: " << suggestions[p] << std::endl;
+                }
 
-                    std::cout << "Size of suggestions: " << suggestions.size() << std::endl;
+                if (!suggestions.empty()) {
 
                     std::cout << "Here are some suggestions from the same directory: \n";
                     for (int k = 0; k < suggestions.size(); k++) {
@@ -115,28 +143,37 @@ int main() {
                         std::string selectedProgram = suggestions[prgChoice - 1];
                         std::string launchDirectory = appTitles.front();
 
-                        std::wstring launchCommand = L"\"" + std::wstring(launchDirectory.begin(), launchDirectory.end()) + L"\\" + std::wstring(selectedProgram.begin(), selectedProgram.end()) + L"\"";
-                        std::wcout << L"launch command: " << launchCommand << std::endl;
+                        launchProgram(launchDirectory, selectedProgram);
 
-                        ShellExecuteW(NULL, NULL, launchCommand.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                        runPg = false;
+                        break;
                     }
                     else {
-                        std::cout << "Invalid choice. Exiting...\n";
+                        std::cout << "Invalid choice.\n" << std::endl;
                     }
                 }
-                else {
-                    std::cout << "No other .exe files found in the same directory\n"
-                        << "Some common errors here could be that the launcher or .exe application is located in a subdirectory\n"
-                        << "Please check the file directory and add the correct route\n"
-                        << "For more information, view the instruction list\n";
-                }
+            }
+            else if (appTitles.front().substr(appTitles.front().size() - 4) == ".exe") {
+                std::string selectedProgram = appTitles.front();
+                std::string launchDirec = appTitles.front().substr(0, appTitles.front().size());
+
+                std::cout << "Launch direc: " << launchDirec << std::endl;
+
+                launchProgram(launchDirec, selectedProgram);
+
+                runPg = false;
+                break;
+            }
+            else {
+                std::cout << "There is some error here. I am not sure what is causing it, but it does exist\n"
+                          << "Good luck soldier.\n";
             }
         }
         else if (startUp == 3) {
             std::cout << "\n"
                 << "This program is intended to make launching programs easy from a CLI.\n"
                 << "To add new files to the directory, you must go to where the .exe to launch is located, or the file just above it\n"
-                << "For example, with steam you should add the steamapps\\common directory(meaning the full file location) into the system\n"
+                << "For example, with steam you should add the steamapps\\common directory (meaning the full file location) into the system\n"
                 << "For certain games where the launcher is located deeper within the files, you will need to add the game file location in\n"
                 << "For example of this, look at Baldurs Gate 3. The launcher is located in the launcher file within the game file\n"
                 << "So, for the program to access it the file directory must be to the common\\Baldurs Gate 3 file, which will allow the system to search deeper\n"
@@ -153,6 +190,5 @@ int main() {
             std::cout << "Invalid input\n";
         }
     }
-
     return 0;
 }
